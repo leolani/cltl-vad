@@ -1,3 +1,4 @@
+import logging
 from queue import Queue
 from typing import Iterable
 
@@ -7,13 +8,16 @@ import webrtcvad
 from cltl.vad.api import VAD
 from cltl.vad.util import as_iterable
 
+logger = logging.getLogger(__name__)
+
+
 SAMPLING_RATES = set([8000, 16000, 32000, 48000])
 FRAME_DURATON = set([10, 20, 30])
 SAMPLE_DEPTH = set([np.int16])
 
 
 class WebRtcVAD(VAD):
-    def __init__(self, min_window: int = 100, max_window: int = 10000, allow_gap: int = 0, mode: int = 3):
+    def __init__(self, allow_gap: int = 0, mode: int = 3):
         self._vad = webrtcvad.Vad(mode)
         self._allow_gap = allow_gap
 
@@ -26,8 +30,9 @@ class WebRtcVAD(VAD):
 
         frame_duration = (len(audio_frame) * 1000) // sampling_rate
         if not frame_duration in FRAME_DURATON:
-            raise ValueError(f"Unsupported frame length {len(audio_frame)},"
-                             f"expected one of {[d * sampling_rate // 1000 for d in FRAME_DURATON]}")
+            raise ValueError(f"Unsupported frame length {audio_frame.shape}, "
+                             f"expected one of {[d * sampling_rate // 1000 for d in FRAME_DURATON]}ms "
+                             f"(rate: {sampling_rate})")
 
         is_mono = audio_frame.ndim == 1 or audio_frame.shape[1] == 1
         mono_frame = audio_frame if is_mono else audio_frame.mean(axis=1).ravel()
@@ -44,13 +49,18 @@ class WebRtcVAD(VAD):
 
         queue = Queue()
 
+        offset = -1
         gap = None
         frame_duration = None
-        for frame in audio_frames:
+        for cnt, frame in enumerate(audio_frames):
+            if cnt % 1000 == 0:
+                logger.debug("Processing frame (%s)", cnt)
             if not frame_duration:
                 frame_duration = len(frame) * 1000 / sampling_rate
 
             if self.is_vad(frame, sampling_rate):
+                if offset < 0:
+                    offset = cnt
                 if gap:
                     list(map(queue.put, gap))
                 gap = []
@@ -63,4 +73,4 @@ class WebRtcVAD(VAD):
 
         queue.put(None)
 
-        return as_iterable(queue)
+        return as_iterable(queue), offset, cnt + 1

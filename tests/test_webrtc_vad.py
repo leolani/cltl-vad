@@ -58,7 +58,7 @@ class TestVADUtil(unittest.TestCase):
 
         audio_frames = [np.zeros(shape, dtype=np.int16) for _ in range(10)]
 
-        speech = self.vad.detect_vad(audio_frames, sampling_rate)
+        speech, _, _ = self.vad.detect_vad(audio_frames, sampling_rate)
 
         self.assertEqual(0, len(list(speech)))
 
@@ -73,7 +73,8 @@ class TestVADUtil(unittest.TestCase):
         frames = len(speech_array) // frame_length
         audio_frames = np.split(speech_array[:frames * frame_length], frames)
 
-        speech = list(self.vad.detect_vad(audio_frames, 16000))
+        speech, _, _ = self.vad.detect_vad(audio_frames, 16000)
+        speech = list(speech)
 
         self.assertEqual(62, len(speech))
 
@@ -92,7 +93,8 @@ class TestVADUtil(unittest.TestCase):
         audio_array = np.concatenate([noise_array, speech_array[:frames * frame_length]])
         audio_frames = np.split(audio_array, 25 + frames)
 
-        speech = list(self.vad.detect_vad(audio_frames, 16000))
+        speech, _, _ = self.vad.detect_vad(audio_frames, 16000)
+        speech = list(speech)
 
         self.assertEqual(62, len(speech))
 
@@ -114,7 +116,8 @@ class TestVADUtil(unittest.TestCase):
 
         audio_frames_iterator = iter(audio_frames)
 
-        speech = list(self.vad.detect_vad(audio_frames_iterator, 16000))
+        speech, _, _ = self.vad.detect_vad(audio_frames_iterator, 16000)
+        speech = list(speech)
 
         self.assertEqual(62, len(speech))
         self.assertLess(0, len(list(audio_frames_iterator)))

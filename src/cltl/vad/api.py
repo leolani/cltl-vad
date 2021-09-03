@@ -28,18 +28,25 @@ class VAD(abc.ABC):
             Stream of audio frames on which voice activity will be detected.
             Implementations may support only specific frame formats.
 
+        sampling_rate : int
+            The sampling rate of the audio frames
+
         blocking : bool
             If True, the method blocks until voice activity is detected.
 
-        timeout : int
-            Maximum number of frames accepted for voice activity detection.
-
+        timeout : float
+            Maximum duration of audio frames accepted for voice activity detection
+            in seconds.
 
         Returns
         -------
-        Queue[np.array]
+        Iterable[np.array]
             A contiguous section of audio frames with voice activity.
-            If blocking is set to False, the returned Iterable will be threadsafe.
+            If blocking is set to False, the returned Iterable will be thread-safe.
+        int
+            The offset of the output frames in the input stream.
+        int
+            The number of frames consumed from the input stream.
 
         Raises
         ------
