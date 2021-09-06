@@ -75,7 +75,7 @@ class Mic:
         if not self._active:
             raise StopIteration()
 
-        data = self._stream.read(self._frame_size * self._channels, exception_on_overflow=False)
+        data = self._stream.read(self._frame_size, exception_on_overflow=False)
         self._mic_time = self._stream.get_time()
 
         return data
