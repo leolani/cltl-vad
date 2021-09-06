@@ -1,11 +1,11 @@
 import logging
-from queue import Queue
+from queue import Queue, Empty
 from typing import Iterable
 
 import numpy as np
 import webrtcvad
 
-from cltl.vad.api import VAD
+from cltl.vad.api import VAD, VadTimeout
 from cltl.vad.util import as_iterable
 
 logger = logging.getLogger(__name__)
@@ -17,9 +17,11 @@ SAMPLE_DEPTH = set([np.int16])
 
 
 class WebRtcVAD(VAD):
-    def __init__(self, allow_gap: int = 0, mode: int = 3):
+    def __init__(self, allow_gap: int = 0, padding: int = 2, mode: int = 3):
+        logger.info("Setup WebRtcVAD with mode %s", mode)
         self._vad = webrtcvad.Vad(mode)
         self._allow_gap = allow_gap
+        self._padding = padding
 
     def is_vad(self, audio_frame: np.array, sampling_rate: int) -> bool:
         if not audio_frame.dtype == np.int16:
@@ -35,7 +37,7 @@ class WebRtcVAD(VAD):
                              f"(rate: {sampling_rate})")
 
         is_mono = audio_frame.ndim == 1 or audio_frame.shape[1] == 1
-        mono_frame = audio_frame if is_mono else audio_frame.mean(axis=1).ravel()
+        mono_frame = audio_frame if is_mono else audio_frame.mean(axis=1, dtype=np.int16).ravel()
 
         return self._vad.is_speech(mono_frame.tobytes(), sampling_rate, len(mono_frame))
 
@@ -48,29 +50,62 @@ class WebRtcVAD(VAD):
             raise NotImplementedError("Currently only blocking is supported")
 
         queue = Queue()
-
         offset = -1
         gap = None
         frame_duration = None
+        padding_buffer = Queue(self._padding) if self._padding else None
+        audio_frames = iter(audio_frames)
         for cnt, frame in enumerate(audio_frames):
-            if cnt % 1000 == 0:
-                logger.debug("Processing frame (%s)", cnt)
+            if offset < 0 and timeout > 0 and self._cnt_to_sec(cnt, frame_duration) > timeout:
+                raise VadTimeout(timeout)
+
             if not frame_duration:
                 frame_duration = len(frame) * 1000 / sampling_rate
+
+            if cnt % 1000 == 0:
+                logger.debug("Processing frames (%s - %sms)", cnt, cnt * frame_duration)
 
             if self.is_vad(frame, sampling_rate):
                 if offset < 0:
                     offset = cnt
+                    logger.debug("Detected VA at %s", offset)
+                    if padding_buffer is not None:
+                        [queue.put(f) for f in padding_buffer.queue]
                 if gap:
                     list(map(queue.put, gap))
                 gap = []
                 queue.put(frame)
             elif gap and len(gap) * frame_duration > self._allow_gap:
                 gap = None
-                break
+                if queue.qsize() * frame_duration > 3 * self._allow_gap:
+                    break
+                else:
+                    queue = Queue()
             elif gap is not None:
                 gap.append(frame)
 
+            if padding_buffer is not None:
+                try:
+                    padding_buffer.get_nowait()
+                except Empty:
+                    pass
+                padding_buffer.put(frame, )
+
+        try:
+            for _ in range(self._padding):
+                queue.put(next(iter(audio_frames)))
+                cnt += 1
+        except StopIteration:
+            pass
+
         queue.put(None)
 
+        logger.debug("Detected VA of length: %s", queue.qsize())
+
         return as_iterable(queue), offset, cnt + 1
+
+    def _cnt_to_sec(self, cnt, frame_duration):
+        if frame_duration is None:
+            return 0
+
+        return cnt * frame_duration // 1000

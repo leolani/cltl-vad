@@ -1,6 +1,4 @@
-import time
 import unittest
-from sys import path
 
 import numpy as np
 import soundfile as sf
@@ -8,7 +6,6 @@ from importlib_resources import path
 from parameterized import parameterized
 
 from cltl.vad.webrtc_vad import WebRtcVAD
-
 
 FRAME_FORMATS = [
     [10, 16000, None],
@@ -25,12 +22,15 @@ FRAME_FORMATS = [
 
 class TestVADUtil(unittest.TestCase):
     def setUp(self) -> None:
-        self.vad = WebRtcVAD(allow_gap=100, mode=2)
+        self.vad = WebRtcVAD(mode=2, padding=0)
 
         # Calibrate VAD
         noise_array = np.random.randint(0, 50, (480,), dtype=np.int16)
-        for _ in range(10):
-            self.vad.is_vad(noise_array * 10, sampling_rate=16000)
+        self.vad.is_vad(noise_array * 100, sampling_rate=16000)
+        try:
+            self.test_detect_vad()
+        except:
+            pass
 
     @parameterized.expand(FRAME_FORMATS)
     def test_is_vad_silence(self, duration, sampling_rate, channels):
@@ -121,6 +121,7 @@ class TestVADUtil(unittest.TestCase):
 
         self.assertEqual(62, len(speech))
         self.assertLess(0, len(list(audio_frames_iterator)))
+
 
     def _play(self, audio_array, sampling_rate):
         import sounddevice as sd
