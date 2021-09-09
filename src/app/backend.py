@@ -96,7 +96,6 @@ def backend_app(sampling_rate, channels, frame_size):
         app_context.mic = mic
 
         mime_type = f"audio/L16; rate={sampling_rate}; channels={channels}; frame_size={frame_size}"
-        # mime_type = "text/plain"
         stream = stream_with_context(audio_stream(mic))
 
         return Response(stream, mimetype=mime_type)

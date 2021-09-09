@@ -27,15 +27,16 @@ def _play(frames, sampling_rate, save=None):
         soundfile.write(save, audio, sampling_rate)
 
 
-def vad_app(allow_gap=100, mode=2, timeout=10):
+def vad_app(allow_gap=100, padding=2, mode=2, timeout=10, storage=None):
     app = Flask(__name__)
 
-    vad = WebRtcVAD(allow_gap=allow_gap, mode=mode)
+    vad = WebRtcVAD(allow_gap=allow_gap, padding=padding, mode=mode, storage=storage)
 
     # TODO remove duplication
     @app.route('/calibrate')
     def calibrate():
         url = request.args.get('url')
+        duration = request.args.get('sec', default=10, type=int)
 
         with requests.get(url, stream=True) as source:
             content_type = source.headers['content-type'].split(CONTENT_TYPE_SEPARATOR)
@@ -55,7 +56,7 @@ def vad_app(allow_gap=100, mode=2, timeout=10):
                        for frame in source.iter_content(bytes_per_frame))
 
             start = time.time()
-            while time.time() - start < 60:
+            while time.time() - start < duration:
                 try:
                     speech, _, _ = vad.detect_vad(content, parameters.rate, blocking=True, timeout=10)
                 except VadTimeout:
@@ -84,7 +85,10 @@ def vad_app(allow_gap=100, mode=2, timeout=10):
             content = (np.frombuffer(frame, np.int16).reshape((parameters.frame_size, parameters.channels))
                        for frame in source.iter_content(bytes_per_frame))
 
-            speech, _, _ = vad.detect_vad(content, parameters.rate, blocking=True, timeout=timeout)
+            try:
+                speech, _, _ = vad.detect_vad(content, parameters.rate, blocking=True, timeout=timeout)
+            except VadTimeout:
+                return Response(status=400)
 
         return Response((frame.tobytes() for frame in speech), mimetype=source.headers['content-type'])
 

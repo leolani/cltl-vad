@@ -1,11 +1,11 @@
 # cltl
-
 numpy==1.19.5
 webrtcvad==2.0.10
+soundfile==0.10.3.post1
 
+# tests
 importlib_resources==5.2.2
 parameterized==0.8.1
-soundfile==0.10.3.post1
 
 # app
 websockets

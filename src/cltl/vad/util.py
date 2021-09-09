@@ -1,5 +1,8 @@
 from queue import Queue
 from typing import Iterable, Any
+import soundfile
+import sounddevice as sd
+import numpy as np
 
 
 def as_iterable(queue: Queue) -> Iterable[Any]:
@@ -21,3 +24,24 @@ def as_iterable(queue: Queue) -> Iterable[Any]:
     while next is not None:
         yield next
         next = queue.get()
+
+
+def store_frames(frames, sampling_rate, save=None):
+    import numpy as np
+    audio = np.concatenate(frames)
+    if save:
+        soundfile.write(save, audio, sampling_rate)
+    else:
+        sd.play(audio, sampling_rate)
+        sd.wait()
+
+
+def to_decibel(frames, ref=np.iinfo(np.int16).max):
+    # frames = np.vstack(frames)
+    # rms_ratios = np.sqrt(np.mean(np.square(frames), axis=0))
+    # rms_log = (10 * np.log10(ratio) for ratio in rms_ratio)
+    # decibel = [int(np.clip(db, -60, 60)) for db in rms_log]
+    # print("db", ref, decibel)
+    # return sum(rms_log)
+
+    raise NotImplementedError()

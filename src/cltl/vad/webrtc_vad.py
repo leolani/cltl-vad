@@ -1,12 +1,13 @@
+import time
+
 import logging
+import numpy as np
+import webrtcvad
 from queue import Queue, Empty
 from typing import Iterable
 
-import numpy as np
-import webrtcvad
-
 from cltl.vad.api import VAD, VadTimeout
-from cltl.vad.util import as_iterable
+from cltl.vad.util import as_iterable, store_frames, to_decibel
 
 logger = logging.getLogger(__name__)
 
@@ -17,11 +18,12 @@ SAMPLE_DEPTH = set([np.int16])
 
 
 class WebRtcVAD(VAD):
-    def __init__(self, allow_gap: int = 0, padding: int = 2, mode: int = 3):
+    def __init__(self, allow_gap: int = 0, padding: int = 2, mode: int = 3, storage: str = None):
         logger.info("Setup WebRtcVAD with mode %s", mode)
         self._vad = webrtcvad.Vad(mode)
         self._allow_gap = allow_gap
         self._padding = padding
+        self._storage = storage
 
     def is_vad(self, audio_frame: np.array, sampling_rate: int) -> bool:
         if not audio_frame.dtype == np.int16:
@@ -50,20 +52,22 @@ class WebRtcVAD(VAD):
             raise NotImplementedError("Currently only blocking is supported")
 
         queue = Queue()
+        storage_buffer = []
         offset = -1
         gap = None
         frame_duration = None
         padding_buffer = Queue(self._padding) if self._padding else None
         audio_frames = iter(audio_frames)
         for cnt, frame in enumerate(audio_frames):
+            storage_buffer.append(frame)
             if offset < 0 and timeout > 0 and self._cnt_to_sec(cnt, frame_duration) > timeout:
                 raise VadTimeout(timeout)
 
             if not frame_duration:
                 frame_duration = len(frame) * 1000 / sampling_rate
 
-            if cnt % 1000 == 0:
-                logger.debug("Processing frames (%s - %sms)", cnt, cnt * frame_duration)
+            # if cnt % 100 == 0:
+            #     logger.debug("Processing frames (%s - %sms) : %s", cnt, cnt * frame_duration, to_decibel(storage_buffer[cnt-100:cnt]))
 
             if self.is_vad(frame, sampling_rate):
                 if offset < 0:
@@ -101,6 +105,9 @@ class WebRtcVAD(VAD):
         queue.put(None)
 
         logger.debug("Detected VA of length: %s", queue.qsize())
+        if self._storage:
+            key = f"{int(time.time())}-{offset}"
+            store_frames(storage_buffer, sampling_rate, save=f"{self._storage}/vad-{key}.wav")
 
         return as_iterable(queue), offset, cnt + 1
 
