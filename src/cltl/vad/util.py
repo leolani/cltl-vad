@@ -1,8 +1,9 @@
 from queue import Queue
 from typing import Iterable, Any
-import soundfile
-import sounddevice as sd
+
 import numpy as np
+import sounddevice as sd
+import soundfile
 
 
 def as_iterable(queue: Queue) -> Iterable[Any]:
@@ -27,7 +28,6 @@ def as_iterable(queue: Queue) -> Iterable[Any]:
 
 
 def store_frames(frames, sampling_rate, save=None):
-    import numpy as np
     audio = np.concatenate(frames)
     if save:
         soundfile.write(save, audio, sampling_rate)
