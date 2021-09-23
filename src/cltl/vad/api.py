@@ -1,8 +1,8 @@
 import abc
-from queue import Queue
 from typing import Iterable
 
 import numpy as np
+
 
 class VadTimeout(Exception):
     def __init__(self, timeout):
@@ -18,7 +18,7 @@ class VAD(abc.ABC):
                    audio_frames: Iterable[np.array],
                    sampling_rate: int,
                    blocking: bool = True,
-                   timeout: int = 0) -> Iterable[np.array]:
+                   timeout: int = 0) -> [Iterable[np.array], int, int]:
         """
         WIP
 

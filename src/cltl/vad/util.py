@@ -28,6 +28,9 @@ def as_iterable(queue: Queue) -> Iterable[Any]:
 
 
 def store_frames(frames, sampling_rate, save=None):
+    if not len(frames):
+        return
+
     audio = np.concatenate(frames)
     if save:
         soundfile.write(save, audio, sampling_rate)
