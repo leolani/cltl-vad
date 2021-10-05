@@ -10,7 +10,6 @@ importlib_resources
 parameterized
 
 # app
-websockets
 requests
 flask
 werkzeug
