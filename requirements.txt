@@ -1,9 +1,11 @@
 .
 
-# cltl
 numpy
 webrtcvad
 soundfile
+
+# cltl
+cltl.backend
 
 # tests
 importlib_resources
