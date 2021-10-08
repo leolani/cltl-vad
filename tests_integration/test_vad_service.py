@@ -24,7 +24,7 @@ def test_source(start, speech_started, speech_ended):
         zeros = np.zeros((16, 1), dtype=np.int16)
         ones = np.ones((16, 1), dtype=np.int16)
 
-        def __init__(self, url, offset):
+        def __init__(self, url, offset, length):
             self.offset = offset
 
         def audio(self) -> Iterable[np.array]:

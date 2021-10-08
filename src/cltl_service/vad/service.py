@@ -6,7 +6,7 @@ from cltl.combot.infra.topic_worker import TopicWorker
 from cltl.combot.infra.util import ThreadsafeBoolean
 from concurrent.futures.thread import ThreadPoolExecutor
 from emissor.representation.container import Index
-from typing import Type
+from typing import Type, Callable
 
 from cltl.backend.source.client_source import ClientAudioSource
 from cltl.backend.spi.audio import AudioSource
@@ -26,9 +26,12 @@ class VadService:
                     config_manager: ConfigurationManager):
         config = config_manager.get_config("cltl.vad")
 
-        return cls(config.get("mic_topic"), config.get("vad_topic"), vad, ClientAudioSource, event_bus, resource_manager)
+        def audio_loader(url, offset, length) -> AudioSource:
+            return ClientAudioSource.from_config(config_manager, url, offset, length)
 
-    def __init__(self, mic_topic: str, vad_topic: str, vad: VAD, audio_loader: Type[AudioSource],
+        return cls(config.get("mic_topic"), config.get("vad_topic"), vad, audio_loader, event_bus, resource_manager)
+
+    def __init__(self, mic_topic: str, vad_topic: str, vad: VAD, audio_loader: Callable[[str, int, int], AudioSource],
                  event_bus: EventBus, resource_manager: ResourceManager):
         self._vad = vad
         self._audio_loader = audio_loader
@@ -94,7 +97,7 @@ class VadService:
         return detect
 
     def _listen(self, url, offset):
-        with self._audio_loader(url, offset) as source:
+        with self._audio_loader(url, offset, -1) as source:
             return self._vad.detect_vad(source, source.rate, blocking=True)
 
     def _create_payload(self, speech, current_offset, payload):
