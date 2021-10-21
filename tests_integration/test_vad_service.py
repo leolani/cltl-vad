@@ -27,6 +27,7 @@ def test_source(start, speech_started, speech_ended):
         def __init__(self, url, offset, length):
             self.offset = offset
 
+        @property
         def audio(self) -> Iterable[np.array]:
             """
             Frames: [0,0,1,1,0,0,0,1,1,1,0]
