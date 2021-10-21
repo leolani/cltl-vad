@@ -85,23 +85,23 @@ class VadService:
         def detect():
             source_offset = 0
             while not self._stopped.value:
-                speech, offset, consumed = self._listen(url, source_offset)
+                speech, offset, consumed, frame_size = self._listen(url, source_offset)
                 speech = list(speech)
 
-                current_offset = source_offset + offset
-                vad_event = self._create_payload(speech, current_offset, payload)
+                speech_offset = source_offset + (offset * frame_size)
+                vad_event = self._create_payload(speech, speech_offset, payload)
                 self._event_bus.publish(self._vad_topic, Event.for_payload(vad_event))
 
-                source_offset += consumed
+                source_offset += consumed * frame_size
 
         return detect
 
     def _listen(self, url, offset):
         with self._audio_loader(url, offset, -1) as source:
-            return self._vad.detect_vad(source, source.rate, blocking=True)
+            return self._vad.detect_vad(source, source.rate, blocking=True) + (source.frame_size,)
 
-    def _create_payload(self, speech, current_offset, payload):
-        segment = Index.from_range(payload.signal_id, current_offset, current_offset + len(speech))
+    def _create_payload(self, speech, speech_offset, payload):
+        segment = Index.from_range(payload.signal_id, speech_offset, speech_offset + sum(len(frame) for frame in speech))
         annotation = VadAnnotation.for_activation(1.0, self._vad.__class__.__name__)
 
         return VadMentionEvent.create(segment, annotation)

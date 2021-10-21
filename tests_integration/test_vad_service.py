@@ -25,7 +25,7 @@ def test_source(start, speech_started, speech_ended):
         ones = np.ones((16, 1), dtype=np.int16)
 
         def __init__(self, url, offset, length):
-            self.offset = offset
+            self.offset = offset // 16
 
         @property
         def audio(self) -> Iterable[np.array]:
@@ -124,7 +124,7 @@ class TestVAD(unittest.TestCase):
                                       test_source(start, speech_started, speech_ended), self.event_bus, None)
         self.vad_service.start()
 
-        audio_started = AudioSignalStarted.create("1", 0, ["cltl-storage:/audio/1"], AudioParameters(16000, 1, 16, 2))
+        audio_started = AudioSignalStarted.create("1", 0, ["cltl-storage:audio/1"], AudioParameters(16000, 1, 16, 2))
         self.event_bus.publish("mic_topic", Event.for_payload(audio_started))
 
         events = Queue()
@@ -144,8 +144,8 @@ class TestVAD(unittest.TestCase):
         wait(speech_ended)
 
         event = events.get(block=True, timeout=0.1)
-        self.assertEqual(2, event.payload.mention.segment[0].start)
-        self.assertEqual(4, event.payload.mention.segment[0].stop)
+        self.assertEqual(2 * 16, event.payload.mention.segment[0].start)
+        self.assertEqual(4 * 16, event.payload.mention.segment[0].stop)
 
         start.set()
         wait(speech_started)
@@ -156,5 +156,5 @@ class TestVAD(unittest.TestCase):
         start.set()
 
         event = events.get(block=True, timeout=0.1)
-        self.assertEqual(7, event.payload.mention.segment[0].start)
-        self.assertEqual(10, event.payload.mention.segment[0].stop)
+        self.assertEqual(7 * 16, event.payload.mention.segment[0].start)
+        self.assertEqual(10 * 16, event.payload.mention.segment[0].stop)
