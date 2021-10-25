@@ -1,8 +1,8 @@
 .
 
 numpy
-webrtcvad
 soundfile
+webrtcvad
 
 # cltl
 cltl.backend

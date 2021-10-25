@@ -10,15 +10,15 @@ class VadTimeout(Exception):
 
 
 class VAD(abc.ABC):
-    def is_vad(self, audio_frame: np.array, sampling_rate: int) -> bool:
+    def is_vad(self, audio_frame: np.ndarray, sampling_rate: int) -> bool:
         raise NotImplementedError("")
 
 
     def detect_vad(self,
-                   audio_frames: Iterable[np.array],
+                   audio_frames: Iterable[np.ndarray],
                    sampling_rate: int,
                    blocking: bool = True,
-                   timeout: int = 0) -> [Iterable[np.array], int, int]:
+                   timeout: int = 0) -> [Iterable[np.ndarray], int, int]:
         """
         WIP
 
