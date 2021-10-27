@@ -20,11 +20,11 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     python_requires='>=3.7',
-    install_requires=["numpy"],
+    install_requires=["numpy>=1.21.2"],
     extras_require={
         "impl": [
-            "soundfile",
-            "webrtcvad",
+            "soundfile>=0.10.3.post1",
+            "webrtcvad>=2.0.10",
             "parameterized"
         ],
         "service": [
