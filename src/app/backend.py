@@ -3,6 +3,7 @@ import logging
 import uuid
 
 import pyaudio
+from emissor.representation.scenario import Modality
 from flask import Flask, Response, stream_with_context
 from flask import g as app_context
 
@@ -84,7 +85,7 @@ class Mic:
 def backend_app(sampling_rate, channels, frame_size):
     app = Flask(__name__)
 
-    @app.route('/mic')
+    @app.route(f"/{Modality.AUDIO.name.lower()}")
     def stream_mic():
         mic = Mic(sampling_rate, channels, frame_size)
 
