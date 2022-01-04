@@ -1,17 +1,18 @@
 import logging
+from concurrent.futures.thread import ThreadPoolExecutor
+from typing import Callable
+
+from cltl.backend.source.client_source import ClientAudioSource
+from cltl.backend.spi.audio import AudioSource
 from cltl.combot.infra.config import ConfigurationManager
 from cltl.combot.infra.event import Event, EventBus
 from cltl.combot.infra.resource import ResourceManager
 from cltl.combot.infra.topic_worker import TopicWorker
 from cltl.combot.infra.util import ThreadsafeBoolean
-from concurrent.futures.thread import ThreadPoolExecutor
-from emissor.representation.container import Index
-from typing import Type, Callable
-
-from cltl.backend.source.client_source import ClientAudioSource
-from cltl.backend.spi.audio import AudioSource
-from cltl.vad.api import VAD
 from cltl_service.backend.schema import AudioSignalStarted, AudioSignalStopped
+from emissor.representation.container import Index
+
+from cltl.vad.api import VAD
 from cltl_service.vad.schema import VadAnnotation, VadMentionEvent
 
 logger = logging.getLogger(__name__)
@@ -83,14 +84,16 @@ class VadService:
         self._stopped.value = False
 
         def detect():
+            consumed = -1
             source_offset = 0
-            while not self._stopped.value:
+            while not self._stopped.value and consumed != 0:
                 speech, offset, consumed, frame_size = self._listen(url, source_offset)
                 speech = list(speech)
 
-                speech_offset = source_offset + (offset * frame_size)
-                vad_event = self._create_payload(speech, speech_offset, payload)
-                self._event_bus.publish(self._vad_topic, Event.for_payload(vad_event))
+                if len(speech) > 0:
+                    speech_offset = source_offset + (offset * frame_size)
+                    vad_event = self._create_payload(speech, speech_offset, payload)
+                    self._event_bus.publish(self._vad_topic, Event.for_payload(vad_event))
 
                 source_offset += consumed * frame_size
 

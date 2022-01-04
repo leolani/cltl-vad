@@ -58,6 +58,8 @@ class WebRtcVAD(VAD):
         frame_duration = None
         padding_buffer = Queue(self._padding) if self._padding else None
         audio_frames = iter(audio_frames)
+
+        cnt = -1
         for cnt, frame in enumerate(audio_frames):
             storage_buffer.append(frame)
             if offset < 0 and timeout > 0 and self._cnt_to_sec(cnt, frame_duration) > timeout:
@@ -104,7 +106,7 @@ class WebRtcVAD(VAD):
 
         queue.put(None)
 
-        logger.debug("Detected VA of length: %s", queue.qsize())
+        logger.debug("Detected VA of length: %s", queue.qsize() - 1)
         if self._storage:
             key = f"{int(time.time())}-{offset}"
             store_frames(storage_buffer, sampling_rate, save=f"{self._storage}/vad-{key}.wav")
