@@ -1,11 +1,12 @@
 import uuid
 
-import time
+from cltl.combot.infra.time_util import timestamp_now
 from dataclasses import dataclass
 
 from emissor.representation.scenario import Mention, Annotation
 
 
+# TODO move to cltl.combot
 @dataclass
 class MentionEvent:
     type: str
@@ -23,4 +24,4 @@ class VadMentionEvent(MentionEvent):
 class VadAnnotation(Annotation[float]):
     @classmethod
     def for_activation(cls, activation: float, source: str):
-        return cls(cls.__name__, activation, source, time.time())
+        return cls(cls.__name__, activation, source, timestamp_now())

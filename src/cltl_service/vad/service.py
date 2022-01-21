@@ -70,16 +70,16 @@ class VadService:
     def _process(self, event):
         payload = event.payload
         if event.payload.type == AudioSignalStarted.__name__:
-            self._tasks[payload.signal_id] = self._executor.submit(self._vad_task(payload))
+            self._tasks[payload.signal.id] = self._executor.submit(self._vad_task(payload))
         if event.payload.type == AudioSignalStopped.__name__:
-            if payload.signal_id not in self._tasks:
+            if payload.signal.id not in self._tasks:
                 logger.error("Received AudioStopped without running VAD: %s", event)
                 return
-            self._tasks[payload.signal_id].result()
-            del self._tasks[payload.signal_id]
+            self._tasks[payload.signal.id].result()
+            del self._tasks[payload.signal.id]
 
     def _vad_task(self, payload):
-        audio_id, url = (payload.signal_id, payload.files[0])
+        audio_id, url = (payload.signal.id, payload.signal.files[0])
 
         self._stopped.value = False
 
@@ -104,7 +104,7 @@ class VadService:
             return self._vad.detect_vad(source, source.rate, blocking=True) + (source.frame_size,)
 
     def _create_payload(self, speech, speech_offset, payload):
-        segment = Index.from_range(payload.signal_id, speech_offset, speech_offset + sum(len(frame) for frame in speech))
+        segment = Index.from_range(payload.signal.id, speech_offset, speech_offset + sum(len(frame) for frame in speech))
         annotation = VadAnnotation.for_activation(1.0, self._vad.__class__.__name__)
 
         return VadMentionEvent.create(segment, annotation)

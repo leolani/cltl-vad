@@ -1,11 +1,10 @@
-import time
-
 import logging
 import numpy as np
 import webrtcvad
 from queue import Queue, Empty
 from typing import Iterable
 
+from cltl.combot.infra.time_util import timestamp_now
 from cltl.vad.api import VAD, VadTimeout
 from cltl.vad.util import as_iterable, store_frames, to_decibel
 
@@ -108,7 +107,7 @@ class WebRtcVAD(VAD):
 
         logger.debug("Detected VA of length: %s", queue.qsize() - 1)
         if self._storage:
-            key = f"{int(time.time())}-{offset}"
+            key = f"{int(timestamp_now())}-{offset}"
             store_frames(storage_buffer, sampling_rate, save=f"{self._storage}/vad-{key}.wav")
 
         return as_iterable(queue), offset, cnt + 1
