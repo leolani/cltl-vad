@@ -32,6 +32,7 @@ setup(
             "cltl.combot",
             "emissor",
             "requests"
-        ]
+        ],
+        "test": ["sounddevice"]
     }
 )

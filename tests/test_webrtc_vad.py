@@ -2,7 +2,7 @@ import unittest
 
 import numpy as np
 import soundfile as sf
-from importlib_resources import path
+from importlib.resources import path
 from parameterized import parameterized
 
 from cltl.vad.webrtc_vad import WebRtcVAD

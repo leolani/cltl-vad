@@ -1,16 +1,16 @@
+import numpy as np
 import threading
 import unittest
+from cltl.backend.api.microphone import AudioParameters
+from cltl.backend.spi.audio import AudioSource
+from cltl.combot.infra.event import Event
+from cltl.combot.infra.event.memory import SynchronousEventBus
+from cltl_service.backend.schema import AudioSignalStarted
+from emissor.representation.scenario import AudioSignal
 from queue import Queue, Empty
 from typing import Iterable
 
-import numpy as np
-from cltl.combot.infra.event import Event
-from cltl.combot.infra.event.memory import SynchronousEventBus
-
-from cltl.backend.api.microphone import AudioParameters
-from cltl.backend.spi.audio import AudioSource
 from cltl.vad.api import VAD
-from cltl_service.backend.schema import AudioSignalStarted
 from cltl_service.vad.service import VadService
 
 
@@ -124,7 +124,10 @@ class TestVAD(unittest.TestCase):
                                       test_source(start, speech_started, speech_ended), self.event_bus, None)
         self.vad_service.start()
 
-        audio_started = AudioSignalStarted.create("1", 0, ["cltl-storage:audio/1"], AudioParameters(16000, 1, 16, 2))
+        audio_signal = AudioSignal.for_scenario("scenario_id", 0, 1,
+                                 f"cltl-storage:audio/1",
+                                 1, 2, signal_id=1)
+        audio_started = AudioSignalStarted.create(audio_signal, AudioParameters(16000, 1, 16, 2))
         self.event_bus.publish("mic_topic", Event.for_payload(audio_started))
 
         events = Queue()
@@ -144,8 +147,8 @@ class TestVAD(unittest.TestCase):
         wait(speech_ended)
 
         event = events.get(block=True, timeout=0.1)
-        self.assertEqual(2 * 16, event.payload.mention.segment[0].start)
-        self.assertEqual(4 * 16, event.payload.mention.segment[0].stop)
+        self.assertEqual(2 * 16, event.payload.mentions[0].segment[0].start)
+        self.assertEqual(4 * 16, event.payload.mentions[0].segment[0].stop)
 
         start.set()
         wait(speech_started)
@@ -156,5 +159,5 @@ class TestVAD(unittest.TestCase):
         start.set()
 
         event = events.get(block=True, timeout=0.1)
-        self.assertEqual(7 * 16, event.payload.mention.segment[0].start)
-        self.assertEqual(10 * 16, event.payload.mention.segment[0].stop)
+        self.assertEqual(7 * 16, event.payload.mentions[0].segment[0].start)
+        self.assertEqual(10 * 16, event.payload.mentions[0].segment[0].stop)
