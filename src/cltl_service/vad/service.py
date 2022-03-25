@@ -52,7 +52,8 @@ class VadService:
 
     def start(self, timeout=30):
         self._topic_worker = TopicWorker([self._mic_topic], self._event_bus, provides=[self._vad_topic],
-                                         resource_manager=self._resource_manager, processor=self._process)
+                                         resource_manager=self._resource_manager, processor=self._process,
+                                         name=self.__class__.__name__)
         self._topic_worker.start().wait()
         self._executor = ThreadPoolExecutor(max_workers=2)
 
