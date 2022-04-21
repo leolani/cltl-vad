@@ -9,7 +9,7 @@ from cltl.combot.infra.event import Event, EventBus
 from cltl.combot.infra.resource import ResourceManager
 from cltl.combot.infra.topic_worker import TopicWorker
 from cltl.combot.infra.util import ThreadsafeBoolean
-from cltl_service.backend.schema import AudioSignalStarted, AudioSignalStopped
+from cltl.combot.event.emissor import AudioSignalStarted, AudioSignalStopped
 from emissor.representation.container import Index
 
 from cltl.vad.api import VAD

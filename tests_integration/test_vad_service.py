@@ -1,14 +1,14 @@
-import numpy as np
 import threading
 import unittest
-from cltl.backend.api.microphone import AudioParameters
+from queue import Queue, Empty
+from typing import Iterable
+
+import numpy as np
 from cltl.backend.spi.audio import AudioSource
 from cltl.combot.infra.event import Event
 from cltl.combot.infra.event.memory import SynchronousEventBus
 from cltl_service.backend.schema import AudioSignalStarted
 from emissor.representation.scenario import AudioSignal
-from queue import Queue, Empty
-from typing import Iterable
 
 from cltl.vad.api import VAD
 from cltl_service.vad.service import VadService
@@ -127,7 +127,7 @@ class TestVAD(unittest.TestCase):
         audio_signal = AudioSignal.for_scenario("scenario_id", 0, 1,
                                  f"cltl-storage:audio/1",
                                  1, 2, signal_id=1)
-        audio_started = AudioSignalStarted.create(audio_signal, AudioParameters(16000, 1, 16, 2))
+        audio_started = AudioSignalStarted.create(audio_signal)
         self.event_bus.publish("mic_topic", Event.for_payload(audio_started))
 
         events = Queue()
