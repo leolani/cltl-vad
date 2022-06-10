@@ -71,6 +71,7 @@ class VadService:
     def _process(self, event):
         payload = event.payload
         if event.payload.type == AudioSignalStarted.__name__:
+            # Run this asynchronously to be able to receive the AudioSignalStopped event
             self._tasks[payload.signal.id] = self._executor.submit(self._vad_task(payload))
         if event.payload.type == AudioSignalStopped.__name__:
             if payload.signal.id not in self._tasks:
