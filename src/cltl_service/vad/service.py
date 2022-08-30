@@ -103,10 +103,9 @@ class VadService:
 
     def _listen(self, url, offset):
         with self._audio_loader(url, offset, -1) as source:
-            return self._vad.detect_vad(source, source.rate, blocking=True) + (source.frame_size,)
+            return self._vad.detect_vad(source.audio, source.rate, blocking=True) + (source.frame_size,)
 
     def _create_payload(self, speech, speech_offset, payload):
         segment = Index.from_range(payload.signal.id, speech_offset, speech_offset + sum(len(frame) for frame in speech))
         annotation = VadAnnotation.for_activation(1.0, self._vad.__class__.__name__)
-
         return VadMentionEvent.create(segment, annotation)
