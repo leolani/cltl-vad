@@ -44,7 +44,7 @@ class VAD(abc.ABC):
             A contiguous section of audio frames with voice activity.
             If blocking is set to False, the returned Iterable will be thread-safe.
         int
-            The offset of the output frames in the input stream.
+            The offset of the output frames in the input stream (in frames).
         int
             The number of frames consumed from the input stream.
 

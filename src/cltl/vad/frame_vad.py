@@ -16,13 +16,14 @@ logger = logging.getLogger(__name__)
 
 class FrameWiseVAD(VAD, abc.ABC):
     def __init__(self, activity_window: int = 1, activity_threshold: float = 1,
-                 allow_gap: int = 0, padding: int = 2,
+                 allow_gap: int = 0, padding: int = 2, min_duration: int = 0,
                  mode: int = 3, storage: str = None):
         logger.info("Setup WebRtcVAD with mode %s", mode)
         self._activity_window = activity_window
         self._activity_threshold = activity_threshold
         self._allow_gap = allow_gap
         self._padding = padding
+        self._min_duration = min_duration
         self._storage = storage
 
     def detect_vad(self,
@@ -41,53 +42,67 @@ class FrameWiseVAD(VAD, abc.ABC):
         except StopIteration:
             return [], -1, 0
 
-        voice_activity = Queue()
-        # Initialized during processing
-        offset = -1
-        gap = None
         frame_duration = 1000 * len(first) / sampling_rate
         window_size = max(1, int(self._activity_window // frame_duration))
         padding_size = int(self._padding // frame_duration)
+        gap_size = int(self._allow_gap // frame_duration)
         padding_buffer = deque(maxlen=padding_size + window_size - 1)
+
+        voice_activity = Queue()
+
+        # Initialized during processing
+        offset = -1
+        gap = None
+        va_length = 0
 
         logger.debug("Started VAD with window of %s and padding of %s frames (%s ms frame duration)",
                      window_size, padding_size, frame_duration)
 
-        cnt = -1
-        for cnt, frame, activity in self._with_activity(chain((first,), audio_frames), sampling_rate, window_size):
+        for cnt, frame, activity in self._with_average_activity(chain((first,), audio_frames), sampling_rate, window_size):
             storage_buffer.append(frame)
             if offset < 0 and timeout > 0 and self._cnt_to_sec(cnt, frame_duration) > timeout:
-                raise VadTimeout(timeout)
+                raise VadTimeout(f"No VA detected within timeout ({timeout})")
 
+            # Debug
             # if cnt % 100 == 0:
             #     logger.debug("Processing frames (%s - %sms) : %s", cnt, cnt * frame_duration, to_decibel(storage_buffer[cnt-100:cnt]))
 
             if activity and activity >= self._activity_threshold:
-                if offset < 0:
-                    offset = cnt - len(padding_buffer)
-                    logger.debug("Detected start of VA at %s, set offset to %s", cnt, offset)
-                    list(map(voice_activity.put, padding_buffer))
+                if voice_activity.qsize() == 0:
+                    padding = list(islice(padding_buffer, padding_size))
+                    offset = cnt - len(padding)
+                    logger.debug("Detected start of VA at %s, set offset to %s (padding: %s) frames", cnt, offset, len(padding))
+                    list(map(voice_activity.put, padding))
+                    padding_buffer = deque(maxlen=padding_size + window_size - 1)
                 if gap:
+                    logger.debug("Detected gap of %s in VA at %s", len(gap), cnt)
                     list(map(voice_activity.put, gap))
                 gap = []
                 voice_activity.put(frame)
+                va_length += 1
             elif gap and len(gap) * frame_duration > self._allow_gap:
-                gap = None
-                if voice_activity.qsize() * frame_duration > 3 * self._allow_gap:
-                    logger.debug("Detected end of VA at %s", cnt)
+                if va_length * frame_duration >= self._min_duration:
+                    logger.debug("Detected end of VA at %s, start padding", cnt)
                     break
                 else:
+                    logger.debug("Reset VA detection for short VA of %s", va_length)
                     voice_activity = Queue()
+                    va_length = 0
+                    gap = None
             elif gap is not None:
                 gap.append(frame)
             else:
                 padding_buffer.append(frame)
 
+        if gap:
+            list(map(voice_activity.put, islice(gap, padding_size)))
+
         try:
-            for _ in range(padding_size):
+            for _ in range(max(0, padding_size - gap_size)):
                 voice_activity.put(next(iter(audio_frames)))
                 cnt += 1
         except StopIteration:
+            logger.debug("Reached end of audio at %s", cnt)
             pass
 
         voice_activity.put(None)
@@ -106,7 +121,7 @@ class FrameWiseVAD(VAD, abc.ABC):
         return cnt * frame_duration // 1000
 
     # From https://docs.python.org/3/library/collections.html#deque-recipes
-    def _with_activity(self, audio_frames, sampling_rate, size):
+    def _with_average_activity(self, audio_frames, sampling_rate, size):
         it = enumerate(audio_frames)
         head = list(islice(it, size - 1))
 
@@ -115,7 +130,8 @@ class FrameWiseVAD(VAD, abc.ABC):
         total = sum(window)
 
         for cnt, frame in head:
-            yield cnt, frame, None
+            # TODO None??
+            yield cnt, frame, total / float(size)
 
         for cnt, frame in it:
             is_vad = int(self.is_vad(frame, sampling_rate))

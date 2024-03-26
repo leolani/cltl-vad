@@ -1,10 +1,20 @@
 import unittest
 from queue import Queue
+from typing import Iterable
+
+import matplotlib.pyplot as plt
 
 import numpy as np
 
 from cltl.vad.util import as_iterable
 
+
+def plot_wav(audio_array: np.array, sampling_rate, window_size, marked):
+    plt.plot(audio_array)
+    plt.axvspan(marked[0], marked[1], facecolor='b', alpha=0.5)
+    ticks = range(0, len(audio_array), sampling_rate // 4)
+    plt.xticks(ticks, [(s * 1000) // sampling_rate for s in ticks])
+    plt.show()
 
 class TestVADUtil(unittest.TestCase):
     def test_as_iterable(self):

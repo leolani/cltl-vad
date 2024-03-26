@@ -15,10 +15,10 @@ SAMPLE_DEPTH = {np.int16}
 
 class WebRtcVAD(FrameWiseVAD):
     def __init__(self, activity_window: int = 1, activity_threshold: float = 1,
-                 allow_gap: int = 0, padding: int = 2,
+                 allow_gap: int = 0, padding: int = 2, min_duration: int = 0,
                  mode: int = 3, storage: str = None):
         logger.info("Setup WebRtcVAD with mode %s", mode)
-        super().__init__(activity_window, activity_threshold, allow_gap, padding, mode, storage)
+        super().__init__(activity_window, activity_threshold, allow_gap, padding, min_duration, mode, storage)
         self._vad = webrtcvad.Vad(mode)
 
     def is_vad(self, audio_frame: np.array, sampling_rate: int) -> bool:
