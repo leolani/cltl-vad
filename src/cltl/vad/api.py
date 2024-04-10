@@ -10,10 +10,11 @@ class VadTimeout(Exception):
 
 
 class VAD(abc.ABC):
+    @abc.abstractmethod
     def is_vad(self, audio_frame: np.ndarray, sampling_rate: int) -> bool:
         raise NotImplementedError("")
 
-
+    @abc.abstractmethod
     def detect_vad(self,
                    audio_frames: Iterable[np.ndarray],
                    sampling_rate: int,
