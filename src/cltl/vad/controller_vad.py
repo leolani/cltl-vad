@@ -16,7 +16,7 @@ class ControllerVAD(VAD):
     def __init__(self, vad: VAD, padding_size: int, min_duration: int):
         self._vad = vad
         self._active = Event()
-        self._padding_size = padding_size
+        self._padding = padding_size
 
     @property
     def active(self) -> bool:
@@ -38,50 +38,58 @@ class ControllerVAD(VAD):
                    timeout: int = 0) -> [Iterable[np.ndarray], int, int]:
         audio_iter = iter(audio_frames)
 
-        padding_buffer = deque(maxlen=self._padding_size)
-        audio = Queue()
-        offset = -1
-
         try:
             frame = next(audio_iter)
             cnt = 1
         except StopIteration:
             logger.debug("Empty audio in VAD")
-            return [], offset, 0
+            return [], -1, 0
 
-        while self.is_vad(frame, sampling_rate) and not self._vad.is_vad(frame, sampling_rate):
+        frame_duration = 1000 * len(frame) / sampling_rate
+        padding_size = int(self._padding // frame_duration)
+
+        padding_buffer = deque(maxlen=padding_size)
+        audio = []
+
+        while not self.active:
+            try:
+                # Drop audio if not active
+                frame = next(audio_iter)
+                cnt += 1
+            except StopIteration:
+                logger.debug("No VA in controlled audio of length %s", cnt)
+                return [], -1, cnt
+
+        while self.active and not self._vad.is_vad(frame, sampling_rate):
             try:
                 padding_buffer.append(frame)
                 frame = next(audio_iter)
                 cnt += 1
             except StopIteration:
                 logger.debug("No VA in controlled audio of length %s", cnt)
-                return [], offset, cnt
+                return [], -1, cnt
 
         offset = cnt - len(padding_buffer) - 1
-        list(map(audio.put, padding_buffer))
+        list(map(audio.append, padding_buffer))
         logger.debug("Detected start of VA at offset %s cnt (padding %s)", offset, len(padding_buffer))
 
         while self.is_vad(frame, sampling_rate):
             try:
-                audio.put(frame)
+                audio.append(frame)
                 frame = next(audio_iter)
-                cnt +=1
+                cnt += 1
             except StopIteration:
-                logger.debug("Detected VA of length: %s with padding: %s", audio.qsize(), self._padding_size)
-                return as_iterable(audio), offset, cnt
+                logger.debug("Detected VA of length: %s", len(audio))
+                return tuple(audio), offset, cnt
 
-        for _ in range(self._padding_size):
+        for _ in range(padding_size):
             try:
-                audio.put(frame)
+                audio.append(frame)
                 frame = next(audio_iter)
                 cnt += 1
             except:
                 break
 
-        logger.debug("Detected VA of length: %s with padding: %s", audio.qsize(), self._padding_size)
+        logger.debug("Detected VA of length: %s", len(audio))
 
-        # Poison queue for as_iterable
-        audio.put(None)
-
-        return as_iterable(audio), offset, cnt
+        return tuple(audio), offset, cnt

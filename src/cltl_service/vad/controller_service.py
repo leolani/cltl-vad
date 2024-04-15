@@ -1,5 +1,4 @@
 import logging
-from concurrent.futures.thread import ThreadPoolExecutor
 from typing import Callable
 
 import flask
@@ -8,41 +7,68 @@ from cltl.backend.spi.audio import AudioSource
 from cltl.combot.infra.config import ConfigurationManager
 from cltl.combot.infra.event import Event, EventBus
 from cltl.combot.infra.resource import ResourceManager
-from cltl.combot.infra.topic_worker import TopicWorker
-from cltl.combot.infra.util import ThreadsafeBoolean
-from cltl.combot.event.emissor import AudioSignalStarted, AudioSignalStopped
-from cltl_service.vad.service import VadService
-from emissor.representation.container import Index
+from cltl_service.vad.schema import VadMentionEvent
+from flask import Response
 
-from cltl.vad.api import VAD
 from cltl.vad.controller_vad import ControllerVAD
-from cltl_service.vad.schema import VadAnnotation, VadMentionEvent
+from cltl_service.vad.service import VadService
 
 logger = logging.getLogger(__name__)
 
 
 class ControllerVadService(VadService):
     @classmethod
-    def from_config(cls, vad: ControllerVAD, event_bus: EventBus, resource_manager: ResourceManager,
-                    config_manager: ConfigurationManager):
+    def from_ctrl_config(cls, vad: ControllerVAD, event_bus: EventBus, resource_manager: ResourceManager,
+                         config_manager: ConfigurationManager):
         config = config_manager.get_config("cltl.vad")
+        ctrl_config = config_manager.get_config("cltl.vad.controller")
 
         def audio_loader(url, offset, length) -> AudioSource:
             return ClientAudioSource.from_config(config_manager, url, offset, length)
 
-        return cls(config.get("mic_topic"), config.get("vad_topic"), vad, audio_loader, event_bus, resource_manager)
+        return cls(ctrl_config.get("control_topic"), config.get("mic_topic"), config.get("vad_topic"),
+                   vad, audio_loader, event_bus, resource_manager)
 
-    def __init__(self, mic_topic: str, vad_topic: str, vad: ControllerVAD, audio_loader: Callable[[str, int, int], AudioSource],
+    def __init__(self, control_topic: str, mic_topic: str, vad_topic: str,
+                 vad: ControllerVAD, audio_loader: Callable[[str, int, int], AudioSource],
                  event_bus: EventBus, resource_manager: ResourceManager):
         super().__init__(mic_topic, vad_topic, vad, audio_loader, event_bus, resource_manager)
+        self._control_topic = control_topic
 
         self._app = None
 
-    def _process(self, event):
-        if event.payload.type == AudioSignalStarted.__name__:
-            self._vad.active = True
+    @property
+    def input_topics(self):
+        return super().input_topics + [self._control_topic]
 
-        super()._process(event)
+    def _process(self, event: Event):
+        if event.metadata.topic == self._control_topic:
+            logger.debug("Controller VAD %s", "activated" if event.payload else "deactivated")
+            self._vad.active = event.payload
+        else:
+            super()._process(event)
+
+    def _vad_task(self, payload):
+        audio_id, url = (payload.signal.id, payload.signal.files[0])
+
+        def detect():
+            consumed = -1
+            source_offset = 0
+            while not self._stopped.value and consumed != 0:
+                speech, offset, consumed, frame_size = self._listen(url, source_offset)
+                speech = list(speech)
+
+                if len(speech) > 0:
+                    speech_offset = source_offset + (offset * frame_size)
+                    vad_event = self._create_payload(speech, speech_offset, payload)
+                    logger.debug("Published VAD event (offset: %s, consumed %s)", offset, consumed)
+                else:
+                    vad_event = VadMentionEvent(VadMentionEvent.__name__, [])
+
+                self._event_bus.publish(self._vad_topic, Event.for_payload(vad_event))
+                source_offset += consumed * frame_size
+
+        return detect
 
     @property
     def app(self):
@@ -51,13 +77,23 @@ class ControllerVadService(VadService):
 
         self._app = flask.Flask(__name__)
 
-        @self._app.route('/vad/active')
-        def activate():
-            return self._vad.active
+        @self._app.route('/rest/active', methods=['GET', 'POST'])
+        def voice_activity():
+            if flask.request.method == 'GET':
+                return str(self._vad.active)
+            if flask.request.method == 'POST':
+                self._vad.active = True
+                logger.debug("VAD activated via POST")
 
-        @self._app.route('/vad/stop', methods=['POST'])
-        def activate():
+                return str(True)
+
+        @self._app.route('/rest/stop', methods=['POST'])
+        def stop_va():
             self._vad.active = False
+
+            logger.debug("VAD deactivated")
+
+            return Response(status=200)
 
         @self._app.route('/urlmap')
         def url_map():

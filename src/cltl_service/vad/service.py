@@ -47,15 +47,20 @@ class VadService:
         self._stopped = ThreadsafeBoolean()
 
     @property
+    def input_topics(self):
+        return [self._mic_topic]
+
+    @property
     def app(self):
         return None
 
     def start(self, timeout=30):
-        self._topic_worker = TopicWorker([self._mic_topic], self._event_bus, provides=[self._vad_topic],
+        self._topic_worker = TopicWorker(self.input_topics, self._event_bus, provides=[self._vad_topic],
                                          resource_manager=self._resource_manager, processor=self._process,
                                          name=self.__class__.__name__)
         self._topic_worker.start().wait()
         self._executor = ThreadPoolExecutor(max_workers=2)
+        self._stopped.value = False
 
     def stop(self):
         if not self._topic_worker:
@@ -73,17 +78,19 @@ class VadService:
         if event.payload.type == AudioSignalStarted.__name__:
             # Run this asynchronously to be able to receive the AudioSignalStopped event
             self._tasks[payload.signal.id] = self._executor.submit(self._vad_task(payload))
+            logger.debug("Started VAD task: %s", event.id)
         if event.payload.type == AudioSignalStopped.__name__:
             if payload.signal.id not in self._tasks:
                 logger.error("Received AudioStopped without running VAD: %s", event)
                 return
             self._tasks[payload.signal.id].result()
             del self._tasks[payload.signal.id]
+            logger.debug("Finished VAD task: %s", event.id)
+
+        logger.debug("Processed event (topic %s)", event.metadata.topic)
 
     def _vad_task(self, payload):
         audio_id, url = (payload.signal.id, payload.signal.files[0])
-
-        self._stopped.value = False
 
         def detect():
             consumed = -1
@@ -108,4 +115,5 @@ class VadService:
     def _create_payload(self, speech, speech_offset, payload):
         segment = Index.from_range(payload.signal.id, speech_offset, speech_offset + sum(len(frame) for frame in speech))
         annotation = VadAnnotation.for_activation(1.0, self._vad.__class__.__name__)
+
         return VadMentionEvent.create(segment, annotation)
