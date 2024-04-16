@@ -58,14 +58,18 @@ class ControllerVadService(VadService):
                 speech, offset, consumed, frame_size = self._listen(url, source_offset)
                 speech = list(speech)
 
+                vad_event = None
                 if len(speech) > 0:
                     speech_offset = source_offset + (offset * frame_size)
                     vad_event = self._create_payload(speech, speech_offset, payload)
                     logger.debug("Published VAD event (offset: %s, consumed %s)", offset, consumed)
-                else:
+                elif consumed != 0 and offset >= 0:
+                    # Don't send an event if no VAD was detected before audio ends
                     vad_event = VadMentionEvent(VadMentionEvent.__name__, [])
 
-                self._event_bus.publish(self._vad_topic, Event.for_payload(vad_event))
+                if vad_event:
+                    self._event_bus.publish(self._vad_topic, Event.for_payload(vad_event))
+
                 source_offset += consumed * frame_size
 
         return detect
