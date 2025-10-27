@@ -77,7 +77,7 @@ class VadService:
         payload = event.payload
         if event.payload.type == AudioSignalStarted.__name__:
             # Run this asynchronously to be able to receive the AudioSignalStopped event
-            self._tasks[payload.signal.id] = self._executor.submit(self._vad_task(payload))
+            self._tasks[payload.signal.id] = self._executor.submit(self._vad_task(event))
             logger.debug("Started VAD task: %s", event.id)
         if event.payload.type == AudioSignalStopped.__name__:
             if payload.signal.id not in self._tasks:
@@ -89,8 +89,8 @@ class VadService:
 
         logger.debug("Processed event (topic %s)", event.metadata.topic)
 
-    def _vad_task(self, payload):
-        audio_id, url = (payload.signal.id, payload.signal.files[0])
+    def _vad_task(self, event):
+        audio_id, url = (event.payload.signal.id, event.payload.signal.files[0])
 
         def detect():
             consumed = -1
@@ -101,8 +101,8 @@ class VadService:
 
                 if len(speech) > 0:
                     speech_offset = source_offset + (offset * frame_size)
-                    vad_event = self._create_payload(speech, speech_offset, payload)
-                    self._event_bus.publish(self._vad_topic, Event.for_payload(vad_event))
+                    vad_event = self._create_payload(speech, speech_offset, event.payload)
+                    self._event_bus.publish(self._vad_topic, Event.for_payload(vad_event, source=event))
 
                 source_offset += consumed * frame_size
 
