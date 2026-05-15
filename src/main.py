@@ -1,37 +1,57 @@
-import argparse
-import logging
+import logging.config
+import os
 
+from cltl.combot.event.emissor import SIG, MEN
+from cltl.combot.infra.config.k8config import K8LocalConfigurationContainer
+from cltl.combot.infra.di_container import singleton
+from cltl.combot.infra.event.api import Event, PAYLOAD
+from cltl.combot.infra.event.memory import SynchronousEventBus
+from cltl_service.vad.container import VADContainer
+from emissor.representation.util import marshal, unmarshal, register_type_var
 from flask import Flask
-from werkzeug.serving import run_simple
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
-from app.backend import backend_app
-from app.vad import vad_app
+from werkzeug.serving import run_simple
 
+logging.config.fileConfig(os.environ.get('CLTL_LOGGING_CONFIG', 'config/logging.config'),
+                          disable_existing_loggers=False)
 logger = logging.getLogger(__name__)
 
+register_type_var(PAYLOAD)
+register_type_var(SIG)
+register_type_var(MEN)
 
-app = Flask(__name__)
+
+def serializer(obj):
+    return marshal(obj, cls=Event)
+
+
+def deserializer(obj):
+    return unmarshal(obj, cls=Event)
+
+
+class ApplicationContainer(VADContainer):
+    @property
+    @singleton
+    def event_bus_serializer(self):
+        return serializer, deserializer
+
+    @property
+    @singleton
+    def event_bus(self):
+        config = self.config_manager.get_config("cltl.event")
+        if config.get("implementation") == "internal":
+            return SynchronousEventBus()
+        return super().event_bus
+
+
+def main():
+    K8LocalConfigurationContainer.load_configuration()
+    application = ApplicationContainer()
+
+    with application:
+        run_simple('0.0.0.0', 8000, DispatcherMiddleware(Flask(__name__)),
+                   threaded=True, use_reloader=False, use_debugger=False)
 
 
 if __name__ == '__main__':
-    logging.basicConfig(
-        level=logging.DEBUG,
-        format='%(asctime)s.%(msecs)03d %(levelname)s %(module)s - %(funcName)s: %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S',
-    )
-
-    parser = argparse.ArgumentParser(description='EMISSOR data processing')
-    parser.add_argument('--rate', type=int, choices=[16000, 32000, 44100], default=16000, help="Sampling rate.")
-    parser.add_argument('--channels', type=int, choices=[1, 2], default=2, help="Number of audio channels.")
-    parser.add_argument('--frame_duration', type=int, choices=[10, 20, 30], default=30,
-                        help="Duration of audio frames in milliseconds.")
-    parser.add_argument('--port', type=int, default=8000, help="Web server port")
-    args, _ = parser.parse_known_args()
-
-    logger.info("Starting webserver with args: %s", args)
-
-    backend = backend_app(args.rate, args.channels, args.frame_duration * args.rate // 1000)
-    vad = vad_app()
-
-    application = DispatcherMiddleware(app, {'/backend': backend, '/vad': vad})
-    run_simple('0.0.0.0', 8000, application, threaded=True, use_reloader=True, use_debugger=True, use_evalex=True)
+    main()
