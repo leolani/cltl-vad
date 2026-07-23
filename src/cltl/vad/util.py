@@ -2,7 +2,6 @@ from queue import Queue
 from typing import Iterable, Any
 
 import numpy as np
-import sounddevice as sd
 import soundfile
 
 
@@ -35,6 +34,7 @@ def store_frames(frames, sampling_rate, save=None):
     if save:
         soundfile.write(save, audio, sampling_rate)
     else:
+        import sounddevice as sd
         sd.play(audio, sampling_rate)
         sd.wait()
 
