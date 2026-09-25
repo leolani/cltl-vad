@@ -48,7 +48,8 @@ class ControllerVadService(VadService):
         else:
             super()._process(event)
 
-    def _vad_task(self, payload):
+    def _vad_task(self, event):
+        payload = event.payload
         audio_id, url = (payload.signal.id, payload.signal.files[0])
 
         def detect():
@@ -68,7 +69,7 @@ class ControllerVadService(VadService):
                     vad_event = VadMentionEvent(VadMentionEvent.__name__, [])
 
                 if vad_event:
-                    self._event_bus.publish(self._vad_topic, Event.for_payload(vad_event))
+                    self._event_bus.publish(self._vad_topic, Event.for_payload(vad_event, source=event))
 
                 source_offset += consumed * frame_size
 
